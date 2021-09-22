@@ -33,6 +33,11 @@
 	}
 
 	// 13 is audio: sox -b 8 -e unsigned-integer -c 1 -r 22050 13.XX120.raw  a.mp3
+	// 16 is video+audio
+	//  6 looks like backgrounds, or sprite sheets
+	// 20 "ADV mem file"
+	//  3 ??
+	//  4 scripts?
 
 /*
 0000000 bf 21 00 00 05 43 53 44 45 46 02 00 00 00 00 00
