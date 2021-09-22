@@ -6,8 +6,8 @@
 	$fp = fopen("16.INTRO", "rb"); fseek($fp, 0x74061);
 	$fp = fopen("16.SAMANSIC", "rb"); fseek($fp, 0x1e085);
 	$fp = fopen("16.VEMPIREA", "rb"); fseek($fp, 0x23);
-	$fp = fopen("16.THEEND", "rb"); fseek($fp, 0x23);
 	$fp = fopen("16.SPACE", "rb"); fseek($fp, 0x23);
+	$fp = fopen("16.THEEND", "rb"); fseek($fp, 0x23);
 	$fp = fopen("16.BFGAME", "rb"); fseek($fp, 0x0039cb4);
 	$fp = fopen("16.VG", "rb"); fseek($fp, 0x23);
 
