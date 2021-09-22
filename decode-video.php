@@ -3,9 +3,13 @@
 	$im = imagecreatetruecolor(640, 480);
 
 	$fp = fopen("16.EIDOS", "rb"); fseek($fp, 0x23);
-	//$fp = fopen("16.INTRO", "rb"); fseek($fp, 0x74061);
-	//$fp = fopen("16.VEMPIREA", "rb"); fseek($fp, 0x23);
-	//$fp = fopen("16.THEEND", "rb"); fseek($fp, 0x23);
+	$fp = fopen("16.INTRO", "rb"); fseek($fp, 0x74061);
+	$fp = fopen("16.SAMANSIC", "rb"); fseek($fp, 0x1e085);
+	$fp = fopen("16.VEMPIREA", "rb"); fseek($fp, 0x23);
+	$fp = fopen("16.THEEND", "rb"); fseek($fp, 0x23);
+	$fp = fopen("16.SPACE", "rb"); fseek($fp, 0x23);
+	$fp = fopen("16.BFGAME", "rb"); fseek($fp, 0x0039cb4);
+	$fp = fopen("16.VG", "rb"); fseek($fp, 0x23);
 
 // 0000000: 10 00 01 00 25 00 04 00 00 00 00 00 00 00 00 00
 // 10 00 01 00 signature
@@ -27,6 +31,10 @@
 
 		$type = ord($f[$offset++]);
 		print "type $type\n";
+
+		if ($type != 1)  {
+			print bin2hex(substr($f, $offset, 640+5)) . "\n";
+		}
 
 		$x = 0;
 		while (true) {
@@ -56,6 +64,37 @@
 		}
 	}
 
+	$chunk_type = unpack("V", substr($f, $offset, 4))[1];
+	$offset += 4;
+	$chunk_size = unpack("V", substr($f, $offset, 4))[1];
+	$offset += 4;
+	if ($chunk_type == 0x00000000) {
+		// palette
+		$header_size = unpack("V", substr($f, $offset, 4))[1];
+		$offset += 4;
+		$header = substr($f, $offset, $header_size);
+		$offset += strlen($header);
+		$palette = substr($f, $offset, $chunk_size - $header_size);
+		$offset += strlen($palette);
+
+		for ($y=0; $y<480; $y++) {
+			for ($x=0; $x<640; $x++) {
+				$c = imagecolorat($im, $x, $y) & 0xff;
+				$r = ord($palette[$c*3+0]) << 2;
+				$g = ord($palette[$c*3+1]) << 2;
+				$b = ord($palette[$c*3+2]) << 2;
+				$rgb = ($r << 16) | ($g << 8) | $b;
+				imagesetpixel($im, $x, $y, $rgb);
+			}
+		}
+	}
+
+	// 00 00 00 00  chunk_type palette
+        // 02 03 00 00  // chunk_size
+	// 02 00 00 00 // header size
+        // 00 ff // from color, to color
+
+	$offset += 0x23;
 	print "offset  $offset\n";
 	imagepng($im, "a.png");
 
