@@ -1,100 +1,192 @@
 <?php
 
-	$im = imagecreatetruecolor(640, 480);
+	$framebuffer = array_fill(0, 640*480, 0);
+	$palette = array_fill(0, 256, 0);
 
-	$fp = fopen("16.EIDOS", "rb"); fseek($fp, 0x23);
-	$fp = fopen("16.INTRO", "rb"); fseek($fp, 0x74061);
-	$fp = fopen("16.SAMANSIC", "rb"); fseek($fp, 0x1e085);
-	$fp = fopen("16.VEMPIREA", "rb"); fseek($fp, 0x23);
-	$fp = fopen("16.SPACE", "rb"); fseek($fp, 0x23);
-	$fp = fopen("16.THEEND", "rb"); fseek($fp, 0x23);
-	$fp = fopen("16.BFGAME", "rb"); fseek($fp, 0x0039cb4);
-	$fp = fopen("16.VG", "rb"); fseek($fp, 0x23);
+	function decode_picture($f)
+	{
+		global $palette;
+		global $framebuffer;
 
-// 0000000: 10 00 01 00 25 00 04 00 00 00 00 00 00 00 00 00
-// 10 00 01 00 signature
-// 25 00       37 frames in this video (each frame has header of 11 bytes)
+		$header = substr($f, 1, 8);
+		$y0 = unpack("v", substr($header, 4, 2))[1];
+		$height = unpack("v", substr($header, 6, 2))[1];
 
-// 0000010: 02 00 [9c 23] 00 00 10 00 02 00 02 [80 02] [e0 01] [00 00] [e0 01]
-// 9c 23       0x239c bytes in this frame
-// 80 02       640 pixels wide
-// e0 01       480 pixels high
-// 00 00       starting at line 0
-// e0 01       ending at line 480
+		$offset = 9;
+		for ($y=0; $y<$height; $y++) {
 
-// 00026c0: 01 00 01 00 00 00 10 00 03 00 03 <- an example of an empty frame
+			$dst = ($y + $y0) * 640;
 
-	$f = fread($fp, 500000);
+			$type = ord($f[$offset++]);
 
-	$offset = 0;
-	for ($y=0; $y<480; $y++) {
+			switch($type) {
 
-		$type = ord($f[$offset++]);
-		print "type $type\n";
-
-		if ($type != 1)  {
-			print bin2hex(substr($f, $offset, 640+5)) . "\n";
-		}
-
-		$x = 0;
-		while (true) {
-			print "y=$y x=$x\n";
-			$times = ord($f[$offset++]);
-			print "y=$y x=$x times=$times\n";
-			if ($times == 0) {
-				// end of line
+				case 0x0:
+				for ($x=0; $x<640; $x++) {
+					$framebuffer[$dst++] = ord($f[$offset++]);
+				}
 				break;
-			} else if ($times < 0x80) {
-				$c = ord($f[$offset++]);
-				print "y=$y x=$x c=$c times=$times\n";
-				$rgb = ($c << 16) | ($c << 8) | $c;
-				while ($times > 0) {
-					imagesetpixel($im, $x++, $y, $rgb);
-					$times--;
+
+				case 0x1:
+				$x = 0;
+				while (true) {
+					$times = ord($f[$offset++]);
+					if ($times == 0) {
+						// end of line
+						break;
+					} else if ($times < 0x80) {
+						$c = ord($f[$offset++]);
+						while ($times > 0) {
+							$framebuffer[$dst++] = $c;
+							$x++;
+							$times--;
+						}
+					} else {
+						$times = 256 - $times;
+						while ($times > 0) {
+							$c = ord($f[$offset++]);
+							$framebuffer[$dst++] = $c;
+							$x++;
+							$times--;
+						}
+					}
 				}
-			} else {
-				$times = 256 - $times;
-				while ($times > 0) {
-					$c = ord($f[$offset++]);
-					$rgb = ($c << 16) | ($c << 8) | $c;
-					imagesetpixel($im, $x++, $y, $rgb);
-					$times--;
+				break;
+
+				case 0x02:
+				$x = 0;
+				while (true) {
+					$times = ord($f[$offset++]);
+					if ($times == 0) {
+						break;
+					}
+
+					if ($times >= 0x80) {
+						$times = 256 - $times;
+						while ($times > 0) {
+							$c = ord($f[$offset++]);
+							$framebuffer[$dst++] = $c;
+							$x++;
+							$times--;
+						}
+					} else {
+						$dst += $times;
+						$x += $times;
+					}
 				}
+				break;
+
+				case 0x03:
+				$x = 0;
+				while (true) {
+					$skip = ord($f[$offset++]);
+					$x += $skip;
+					$dst += $skip;
+
+					$times = ord($f[$offset++]);
+					if ($times < 0x80 && $times > 0) {
+						$c = ord($f[$offset++]);
+						while ($times > 0) {
+							$framebuffer[$dst++] = $c;
+							$x++;
+							$times--;
+						}
+					} else if ($times >= 0x80) {
+						$times = 256 - $times;
+						while ($times > 0) {
+							$c = ord($f[$offset++]);
+							$framebuffer[$dst++] = $c;
+							$x++;
+							$times--;
+						}
+					}
+
+					if (ord($f[$offset]) == 0xff) {
+						$offset++;
+						break;
+					}
+				}
+				break;
+
+				case 0x04:
+				break;
+
+				default:
+				die("Can't handle $type");
 			}
 		}
 	}
 
-	$chunk_type = unpack("V", substr($f, $offset, 4))[1];
-	$offset += 4;
-	$chunk_size = unpack("V", substr($f, $offset, 4))[1];
-	$offset += 4;
-	if ($chunk_type == 0x00000000) {
-		// palette
-		$header_size = unpack("V", substr($f, $offset, 4))[1];
-		$offset += 4;
-		$header = substr($f, $offset, $header_size);
-		$offset += strlen($header);
-		$palette = substr($f, $offset, $chunk_size - $header_size);
-		$offset += strlen($palette);
+	function create_image()
+	{
+		global $palette;
+		global $framebuffer;
 
+		$offset = 0;
+		$im = imagecreatetruecolor(640, 480);
 		for ($y=0; $y<480; $y++) {
 			for ($x=0; $x<640; $x++) {
-				$c = imagecolorat($im, $x, $y) & 0xff;
-				$r = ord($palette[$c*3+0]) << 2;
-				$g = ord($palette[$c*3+1]) << 2;
-				$b = ord($palette[$c*3+2]) << 2;
-				$rgb = ($r << 16) | ($g << 8) | $b;
-				imagesetpixel($im, $x, $y, $rgb);
+				$c = $framebuffer[$offset++];;
+				$color = $palette[$c];
+				imagesetpixel($im, $x, $y, $color);
 			}
 		}
+
+		return $im;
 	}
 
-	// 00 00 00 00  chunk_type palette
-        // 02 03 00 00  // chunk_size
-	// 02 00 00 00 // header size
-        // 00 ff // from color, to color
+	#$fp = fopen("16.EIDOS", "rb"); fseek($fp, 0x23);
+	#$fp = fopen("16.INTRO", "rb"); fseek($fp, 0x74061);
+	#$fp = fopen("16.SAMANSIC", "rb"); fseek($fp, 0x1e085);
+	#$fp = fopen("16.VEMPIREA", "rb"); fseek($fp, 0x23);
+	#$fp = fopen("16.SPACE", "rb"); fseek($fp, 0x23);
+	#$fp = fopen("16.BFGAME", "rb"); fseek($fp, 0x0039cb4);
+	#$fp = fopen("16.VG", "rb");
+	#$fp = fopen("16.CREDIT", "rb");
+	#$fp = fopen("16.INTRO3", "rb"); fseek($fp, 0x1e);
+	#$fp = fopen("16.WINGS", "rb"); fseek($fp, 0x21);
+	#$fp = fopen("16.SPACE", "rb"); fseek($fp, 0x23);
+	$fp = fopen("16.PHONES", "rb");
 
-	$offset += 0x23;
-	print "offset  $offset\n";
-	imagepng($im, "a.png");
+	fseek($fp, 0x10, SEEK_SET); // discard the first 16 bytes
+
+	$index = 0;
+	while (!feof($fp)) {
+
+		$save_pic = false;
+
+		$str = fread($fp, 2);
+		if (strlen($str) != 2) {
+			break;
+		}
+
+		$count = unpack("v", $str)[1];
+		while ($count > 0) {
+			$count--;
+			$header = fread($fp, 8);
+			$chunk_size = unpack("V", $header)[1];
+			$f = fread($fp, $chunk_size);
+
+			if (ord($f[0]) == 0) {
+				// palette
+				for ($i=0; $i<256; $i++) {
+					$r = ord($f[2 + $i*3 + 0]) << 2;
+					$g = ord($f[2 + $i*3 + 1]) << 2;
+					$b = ord($f[2 + $i*3 + 2]) << 2;
+					$color = ($r << 16) | ($g << 8) + $b;
+					$palette[$i] = $color;
+				}
+			}
+
+			if (ord($f[0]) == 2 || ord($f[0]) == 1) {
+				decode_picture($f);
+				$save_pic = true;
+			}
+		}
+
+		if ($save_pic) {
+			$im = create_image();
+			imagepng($im, sprintf("CREDIT-%04d.png", $index++));
+		}
+	}
 
