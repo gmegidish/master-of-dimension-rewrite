@@ -3,8 +3,11 @@
 	//$fp = fopen("4.VE", "rb"); fseek($fp, 0xa870);
 	//$fp = fopen("4.INTRO", "rb"); fseek($fp, 0x8a);
 	$fp = fopen("4.OPTIONS", "rb");
-	$fp = fopen("4.INTRO", "rb");
-	$fp = fopen("4.MENU", "rb");
+	//$fp = fopen("4.INTRO", "rb");
+	//$fp = fopen("4.MENU", "rb");
+	//$fp = fopen("4.ENTRY", "rb");
+	//$fp = fopen("4.OPTION", "rb");
+	//$fp = fopen("4.INTER", "rb");
 	//$fp = fopen("4.THEEND", "rb"); 
 
 	function read_array_of_strings($fp): array
@@ -41,46 +44,56 @@
 
 	$count_of = fread($fp, 4); // if >= 0x96 then die files_load_scn:
 	$count_of = unpack("V", $count_of)[1];
-	$what = fread($fp, 176 * $count_of);
+	print "count of cursors $count_of\n";
+	if  ($count_of > 0) {
+		$what = fread($fp, 176 * $count_of);
 
-	print "count $count_of\n";
-	for ($i=0; $i<$count_of; $i++) {
-		print bin2hex(substr($what, $i*176, 176)) . "\n";
+		for ($i=0; $i<$count_of; $i++) {
+			for ($j=0; $j < 176/4; $j++) {
+				$c = substr($what, $i*176 + $j*4, 4);
+				//print bin2hex($c) . " ";
+				//if ((($j+1)%8) == 0) print "\n";
+			}
+
+			//print "\n";
+		}
 	}
 
-	$count_of = fread($fp, 4); // if >= 1000 then die  files_load_scn:253
-	$count_of = unpack("V", $count_of)[1];
-	$what = fread($fp, 20 * $count_of);
-	print "count $count_of\n";
-	for ($i=0; $i<$count_of; $i++) {
-		print bin2hex(substr($what, $i*20, 20)) . "\n";
+	$n_areas = fread($fp, 4); // if >= 1000 then die  files_load_scn:253
+	$n_areas = unpack("V", $n_areas)[1];
+	print "Number of areas: $n_areas\n";
+	if ($n_areas > 0) {
+		$areas = fread($fp, 20 * $n_areas);
+		for ($i=0; $i<$n_areas; $i++) {
+			$area = substr($areas, $i *20, 20);
+			$points = unpack("V5", $area);
+			//print "Area $i: " . json_encode(array_values($points)) . "\n";
+			//print bin2hex(substr($areas, $i*20, 20)) . "\n";
+		}
+
+		print "\n";
 	}
 
 	$what = fread($fp, 0xf * 4);
+	// print_r(bin2hex($what)); exit;
 
 	$count_of = fread($fp, 4); // if >= 1000 then die  files_load_scn:253
-	$count_of = unpack("V", $count_of)[1];
-	print "count $count_of\n";
+	$count_of_scripts = unpack("V", $count_of)[1];
 
 	print "Strings array: " . json_encode($arr1) . "\n";
 	print "Palettes array: " . json_encode($arr2) . "\n";
 	print "Exits array: " . json_encode($arr3) . "\n";
-	print "Animatins array: " . json_encode($arr4) . "\n";
+	print "Animations array: " . json_encode($arr4) . "\n";
 	print "SCA/SMC array: " . json_encode($arr5) . "\n";
 	print "Themes array:" . json_encode($arr6) . "\n";
 	print "Sound/speech array:" . json_encode($arr7) . "\n";
 
-	//fseek($fp, 0xcc);
-	//fseek($fp, 0x10ec+1);
-	//fseek($fp, 0xe4, SEEK_SET);
-	//fseek($fp, 0xd7b, 0);
-
-	while (!feof($fp)) {
+	for ($script_index=0; $script_index < $count_of_scripts; $script_index++) {
 
 		$data = ($script_type == 1) ? fread($fp, 1) . "\x0\x0\x0" : fread($fp, 4);
 		$count = unpack("V", $data)[1];
 
-		print sprintf("\nCommands in this batch (%d):\n", $count);
+		print sprintf("\n${script_index}: Commands in this batch (%d):\n", $count);
 
 		while ($count > 0) {
 			$buf = fread($fp, 0x10);
@@ -129,7 +142,8 @@
 				// nop
 				break;
 
-				case -0x10:
+				case 0x13:
+				print sprintf("\tremove_ani?(%d)\n", $args[2]);
 				break;
 
 				case 0x19:
@@ -147,13 +161,17 @@
 				print sprintf("\tspeak(\"%s\")\n", $str);
 				break;
 
+				case 0x65:
+				print sprintf("\trun_prog(%d)\n", $args[2]);
+				break;
+
 				case -0x70:
 				// break loop
 				print sprintf("\tbreak\n");
 				break;
 
 				case 0x71:
-				$str = $arr3[$args[2]];
+				$str = $arr5[$args[2]];
 				print sprintf("\tintro_play(\"%s\")\n", $str);
 				break;
 
@@ -168,6 +186,7 @@
 				print sprintf("\tnwspeak(\"%s\")\n", $str);
 				break;
 				
+				case 0xff:
 				case 0x100:
 				// nop
 				break;
@@ -189,8 +208,11 @@
 				break;
 
 				case 0x157:
-				case 0x158:
 				print sprintf("\t__debug(%d)\n", $args[2]);
+				break;
+
+				case 0x158:
+				print sprintf("\tnop\n");
 				break;
 
 				case 0x16c:
@@ -204,6 +226,69 @@
 
 				case 0x17a:
 				print sprintf("\tstop all sound %x %d\n",  $args[2], $args[3]);
+				break;
+
+				case 0x850:
+				print sprintf("\tvar_%d = txt_get_speed()\n", $args[2]);
+				break;
+
+				case 0x852:
+				print sprintf("\ttxt_set_on(var_%d)\n", $args[2]);
+				break;
+
+				case 0x855:
+				print sprintf("\tvar_%d = thm_get_on()\n", $args[2]);
+				break;
+
+				case 0x856:
+				print sprintf("\tvar_%d = txt_get_on()\n", $args[2]);
+				break;
+
+				case 0x857:
+				print sprintf("\tvar_%d = (_DAT_0062b284 == 0)\n", $args[2]);
+				break;
+
+				case 0x858:
+				print sprintf("\tvar_%d = pal_get_brightness()\n", $args[2]);
+				break;
+
+/*
+        case 0x2bd:
+          program_memory[(int)arg_1] = program_memory[(int)arg_1] / (int)arg_2;
+          iVar1 = INT_0070be90;
+          break;
+        case 0x2be:
+          program_memory[(int)arg_1] = program_memory[(int)arg_1] * arg_2;
+          iVar1 = INT_0070be90;
+          break;
+        case 0x2bf:
+          program_memory[(int)arg_1] = program_memory[(int)arg_1] % (int)arg_2;
+          iVar1 = INT_0070be90;
+          break;
+*/
+
+				case 0x901:
+				print sprintf("\tgv_addbutton(%d, 0)\n", $args[2]);
+				break;
+
+				case 0x902:
+				print sprintf("\tgv_update_buttons()\n");
+				break;
+
+				case 0x903:
+				print sprintf("\tgv_addbutton(-1, %d)\n", $args[3]);
+				break;
+
+				case 0x1004:
+				print sprintf("\tinit_00468bb5()\n");
+				break;
+
+				case 0x1838:
+				print sprintf("\tgran_diary_init()\n");
+				break;
+
+				case 0x13ba:
+				print sprintf("\tadd_ani_by_num(num=%d, type=1, read_delay=0)\n", $args[2]);
 				break;
 
 				default:
