@@ -17,15 +17,15 @@ Types within bunch file:
   - Type 6: backgrounds
   - Type 7: 256-colors mouse cursors
   - Type 10:
-  - Type 12:
-  - Type 13:
+  - Type 12: themes (music)
+  - Type 13: audio
   - Type 16: video with muxed audio and subtitles
   - Type 17: lips (timed lip animation)
-  - Type 18:
+  - Type 18: (empty files?)
   - Type 20: ADV mem file
   - Type 21:
   - Type 22: strings file
-  - Type 32:
-  - Type 34:
-  - Type 40:
+  - Type 32: audio?
+  - Type 34: audio, part of a theme (instrument?)
+  - Type 40: windows 16x16 icons
 
