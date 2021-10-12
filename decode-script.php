@@ -1,14 +1,18 @@
 <?
 
 	//$fp = fopen("4.VE", "rb"); fseek($fp, 0xa870);
-	//$fp = fopen("4.INTRO", "rb"); fseek($fp, 0x8a);
-	$fp = fopen("4.OPTIONS", "rb");
+	//$fp = fopen("4.OPTIONS", "rb");
 	//$fp = fopen("4.INTRO", "rb");
-	//$fp = fopen("4.MENU", "rb");
+	$fp = fopen("4.MENU", "rb");
+	$fp = fopen("4.VVI2", "rb");
+	//$fp = fopen("4.VVB", "rb");
 	//$fp = fopen("4.ENTRY", "rb");
 	//$fp = fopen("4.OPTION", "rb");
 	//$fp = fopen("4.INTER", "rb");
 	//$fp = fopen("4.THEEND", "rb"); 
+	//$fp = fopen("4.MAPMUSIC", "rb");
+	//$fp = fopen("4.VVK3", "rb");
+	//$fp = fopen("4.VVK", "rb");
 
 	function read_array_of_strings($fp): array
 	{
@@ -18,6 +22,24 @@
 		for ($i=0; $i<$count; $i++) {
 			$len = ord(fread($fp, 1));
 			$str = fread($fp, $len);
+			$strings[] = $str;
+		}
+
+		return $strings;
+	}
+
+	function read_consts($fp): array
+	{
+		$strings = [];
+
+		while (!feof($fp)) {
+			$bytes = fread($fp, 4);
+			if (strlen($bytes) < 4) {
+				break;
+			}
+
+			$length = unpack("V", $bytes)[1];
+			$str = $length > 0 ? fread($fp, $length) : "";
 			$strings[] = $str;
 		}
 
@@ -42,6 +64,12 @@
 	$arr6 = read_array_of_strings($fp);
 	$arr7 = read_array_of_strings($fp);
 
+	$fp2 = fopen("22.MENU", "rb");
+	$fp2 = fopen("22.VVI2", "rb");
+	//$fp2 = fopen("22.ENTRY", "rb");
+	$strings = read_consts($fp2);
+	print_r($strings);
+
 	$count_of = fread($fp, 4); // if >= 0x96 then die files_load_scn:
 	$count_of = unpack("V", $count_of)[1];
 	print "count of cursors $count_of\n";
@@ -49,13 +77,14 @@
 		$what = fread($fp, 176 * $count_of);
 
 		for ($i=0; $i<$count_of; $i++) {
+			print "$i: ";
 			for ($j=0; $j < 176/4; $j++) {
-				$c = substr($what, $i*176 + $j*4, 4);
-				//print bin2hex($c) . " ";
+				$c = unpack("V", substr($what, $i*176 + $j*4, 4))[1];
+				print sprintf("%x ", $c);
 				//if ((($j+1)%8) == 0) print "\n";
 			}
 
-			//print "\n";
+			print "\n";
 		}
 	}
 
@@ -67,7 +96,7 @@
 		for ($i=0; $i<$n_areas; $i++) {
 			$area = substr($areas, $i *20, 20);
 			$points = unpack("V5", $area);
-			//print "Area $i: " . json_encode(array_values($points)) . "\n";
+			print "Area $i: " . json_encode(array_values($points)) . "\n";
 			//print bin2hex(substr($areas, $i*20, 20)) . "\n";
 		}
 
@@ -93,7 +122,7 @@
 		$data = ($script_type == 1) ? fread($fp, 1) . "\x0\x0\x0" : fread($fp, 4);
 		$count = unpack("V", $data)[1];
 
-		print sprintf("\n${script_index}: Commands in this batch (%d):\n", $count);
+		print sprintf("\n${script_index}: Commands in this batch (%d): /* %s */\n", $count, $strings[$script_index]);
 
 		while ($count > 0) {
 			$buf = fread($fp, 0x10);
@@ -110,12 +139,16 @@
 				print sprintf("\tnop\n");
 				break;
 
-				case 0x191:
-				print sprintf("\tget_ani_by_slot(%d)\n", $args[2]);
+				case 0x7:
+				print sprintf("\twm_recalc_curs(%d)\n", $args[2]);
 				break;
 
-				case 0x195:
-				print sprintf("\tget_ani_by_slot(%d)\n", $args[2]);
+				case 0x0f:
+				print sprintf("\tendif\n");
+				break;
+
+				case 0x10:
+				print sprintf("\tcontinue?\n");
 				break;
 
 				case 0x03:
@@ -124,6 +157,10 @@
 
 				case 0x04:
 				print sprintf("\tvar_%d = 0x%x\n", $args[2], $args[3]);
+				break;
+
+				case 0x08:
+				print sprintf("\twm_recalc_curs\n");
 				break;
 
 				case 0x09:
@@ -138,17 +175,37 @@
 				print sprintf("\tif var_%d >= 0x%x\n", $args[2], $args[3]);
 				break;
 
+
 				case 0x0f:
 				// nop
 				break;
 
 				case 0x13:
-				print sprintf("\tremove_ani?(%d)\n", $args[2]);
+				$str = $arr4[$args[2]];
+				print sprintf("\tremove_ani?(\"%s\") // %d\n", $str, $args[2]);
 				break;
 
 				case 0x19:
-				$str = $arr2[$args[2]];
+				$str = $arr4[$args[2]];
 				print sprintf("\tget_ani_slot_by_num(\"%s\") // %d\n", $str, $args[2]);
+				break;
+
+				case 0x3b:
+				$str = $strings[$args[2]];
+				print sprintf("\tswitch_to_script(\"%s\") // %d\n", $str, $args[2]);
+				break;
+
+				case -0x3c:
+				$str = $arr4[$args[2]];
+				print sprintf("\tani_add_by_num(num=%d /* %s */, type=0, read_delay=0) 3c\n", $args[2], $str);
+				break;
+
+				case 0x49:
+				print sprintf("\twait_frames_no_async(1)\n");
+				break;
+
+				case 0x13c:
+				print sprintf("\tfreeze_frame?(%d)\n", $args[2]);
 				break;
 
 				case 0x4d:
@@ -182,13 +239,12 @@
 				break;
 
 				case 0xcd:
-				$str = $arr5[$args[2]];
-				print sprintf("\tnwspeak(\"%s\")\n", $str);
+				$str = $arr7[$args[2]];
+				print sprintf("\tnwspeak(\"%s\") /* %d */\n", $str, $args[2]);
 				break;
 				
 				case 0xff:
 				case 0x100:
-				// nop
 				break;
 
 				case 0x12d:
@@ -208,7 +264,7 @@
 				break;
 
 				case 0x157:
-				print sprintf("\t__debug(%d)\n", $args[2]);
+				print sprintf("\tprintf(\"%s\") // %d\n", $arr1[$args[2]], $args[2]);
 				break;
 
 				case 0x158:
@@ -216,7 +272,7 @@
 				break;
 
 				case 0x16c:
-				$str = $arr4[$args[2]];
+				$str = $arr6[$args[2]];
 				print sprintf("\tthm_event(\"%s\")\n", $str);
 				break;
 
@@ -226,6 +282,30 @@
 
 				case 0x17a:
 				print sprintf("\tstop all sound %x %d\n",  $args[2], $args[3]);
+				break;
+
+				case 0x191:
+				print sprintf("\tani_suspend(get_ani_slot_by_num(%d))\n", $args[2]);
+				break;
+
+				case 0x195:
+				print sprintf("\tani_clear_suspended(get_ani_slot_by_num(%d))\n", $args[2]);
+				break;
+
+				case 0x196:
+				print sprintf("\tasync_add_timer(%d, %d)\n", $args[3], $args[2]);
+				break;
+
+				case 0x204:
+				print sprintf("\tpal_smooth_fade_toblack(%d)\n", $args[2]);
+				break;
+
+				case 0x2c0:
+				print sprintf("\tDAT_004c5c48 = 5\n");
+				break;
+
+				case 0x84c:
+				print sprintf("\tvar_%d = si_get_vol()\n", $args[2]);
 				break;
 
 				case 0x850:
@@ -279,6 +359,10 @@
 				print sprintf("\tgv_addbutton(-1, %d)\n", $args[3]);
 				break;
 
+				case 0x905:
+				print sprintf("\tsav_select_load()\n");
+				break;
+
 				case 0x1004:
 				print sprintf("\tinit_00468bb5()\n");
 				break;
@@ -288,7 +372,12 @@
 				break;
 
 				case 0x13ba:
-				print sprintf("\tadd_ani_by_num(num=%d, type=1, read_delay=0)\n", $args[2]);
+				$str = $arr4[$args[2]];
+				print sprintf("\tani_add_by_num(num=%d /* %s */, type=1, read_delay=0)\n", $args[2], $str);
+				print sprintf("\t+ ani_set_priority()\n");
+				print sprintf("\t+ ani_set_advance()\n");
+				print sprintf("\t+ ani_set_frame()\n");
+				print sprintf("\t+ ani_suspend()\n");
 				break;
 
 				default:
