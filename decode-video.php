@@ -1,7 +1,67 @@
 <?php
 
+	class SentenceReader
+	{
+		private $_strings = [];
+
+		public function __construct(string $filename)
+		{
+			$this->read($filename);
+		}
+
+		public function get(string $id): string
+		{
+			return $this->_strings[$id] ?? "";
+		}
+
+		private function mb_strrev(string $str): string
+		{
+			$r = '';
+			for ($i = mb_strlen($str); $i>=0; $i--) {
+				$r .= mb_substr($str, $i, 1);
+			}
+
+			return $r;
+		}
+
+		private function read(string $filename)
+		{
+			$f = fopen($filename, "rb");
+			$signature = fread($f, 4); // 0x000008cb
+
+			while (!feof($f)) {
+				$id_length = fread($f, 4);
+				if (strlen($id_length) < 4) {
+					break;
+				}
+
+				$id_length = unpack("V", $id_length)[1];
+				$id = fread($f, $id_length); 
+
+				$length = fread($f, 4);
+				$length = unpack("V", $length)[1];
+				if ($length > 0) {
+					$text = fread($f, $length);
+
+					if (ord($text[0]) >= 0x80) {
+						// hebrew
+						$text = iconv("cp1255", "UTF-8", $text);
+						$text = $this->mb_strrev($text);
+					}
+
+					//print "id: '$id' => '$text'\n";
+					$this->_strings[$id] = $text;
+				}
+			}
+		}
+	}
+
+	$loader = new SentenceReader("SENTENCE.HEB");
+
 	#$fp = fopen("16.EIDOS", "rb"); fseek($fp, 0x23);
-	#$fp = fopen("16.INTRO", "rb"); fseek($fp, 0x74061);
+	$fp = fopen("16.INTRO", "rb");
+	$fp = fopen("16.TECLU1", "rb");
+	$fp = fopen("16.GAME110", "rb");
 	#$fp = fopen("16.SAMANSIC", "rb"); fseek($fp, 0x1e085);
 	#$fp = fopen("16.VEMPIREA", "rb"); fseek($fp, 0x23);
 	#$fp = fopen("16.SPACE", "rb"); fseek($fp, 0x23);
@@ -13,7 +73,6 @@
 	#$fp = fopen("16.SNORKEL", "rb"); 
 	#$fp = fopen("16.PHONES", "rb");
 	#$fp = fopen("16.VVKSPACE", "rb");
-	$fp = fopen("../../DUMP.MOD/16.INTRO", "rb");
 
 	$framebuffer = array_fill(0, 640*480, 0);
 	$palette = array_fill(0, 256, 0);
@@ -28,8 +87,6 @@
 		$header = substr($f, 1, 8);
 		$y0 = unpack("v", substr($header, 4, 2))[1];
 		$height = unpack("v", substr($header, 6, 2))[1];
-
-		print "y0 $y0 $height\n";
 
 		$offset = 9;
 		while (true) {
@@ -117,7 +174,8 @@
 					break;
 
 					default:
-					die("Can't handle $type\n");
+					//die("Can't handle $type\n");
+					return;
 				}
 			}
 
@@ -149,6 +207,8 @@
 		return $im;
 	}
 
+	@unlink("CREDIT.raw");
+
 	fseek($fp, 0x10, SEEK_SET); // discard the first 16 bytes
 
 	$index = 0;
@@ -161,18 +221,21 @@
 			break;
 		}
 
+		$inner = 0;
 		$count = unpack("v", $str)[1];
 		while ($count > 0) {
 			$count--;
 			$header = fread($fp, 8);
 			$chunk_size = unpack("V", $header)[1];
-			print "count $count chunk size $chunk_size\n";
+			// print "count $count chunk size $chunk_size\n";
 			if ($chunk_size == 0) {
 				continue;
 			}
 
+			$chunk_type = unpack("V", substr($header, 4, 4))[1];
 			$f = fread($fp, $chunk_size);
-			print "  " . ord($f[0]) . "\n";
+			print "$index.$inner  Type: " . sprintf("0x%x 0x%x", $chunk_type & 0xffff, $chunk_size >> 16) . "\n";
+			$inner++;
 
 			if (ord($f[0]) == 0) {
 				// palette
@@ -185,6 +248,7 @@
 				}
 			}
 
+			/*
 			if (ord($f[0]) == 4) {
 				$img_width = unpack("v", substr($f, 1, 2))[1];
 				$img_height = unpack("v", substr($f, 3, 2))[1];
@@ -218,7 +282,7 @@
 								if (($c & 0xc0) == 0) {
 								}
 					
-								print $c; exit;
+								print "---- $c\n"; exit;
 							}
 							break;
 
@@ -228,10 +292,21 @@
 					}
 				}
 			}
+			*/
 
-			if (ord($f[0]) == 2 || ord($f[0]) == 1) {
+			if (($chunk_type & 0xffff) == 0x10) {
 				decode_picture($f);
 				$save_pic = true;
+			}
+
+			if (($chunk_type & 0xffff) == 0x1000) {
+				$ptr = strpos($f, "\x0");
+				$id = substr($f, 0, $ptr);
+				print "TEXT: $id => " . $loader->get($id) . "\n";
+			}
+
+			if (($chunk_type & 0xffff) == 0x42) {
+				file_put_contents("CREDIT.raw", $f, FILE_APPEND);
 			}
 		}
 
@@ -240,4 +315,6 @@
 			imagepng($im, sprintf("CREDIT-%04d.png", $index++));
 		}
 	}
+
+	//system("sox -b 8 -e unsigned-integer -c 1 -r 22050 CREDIT.raw CREDIT.wav");	
 
