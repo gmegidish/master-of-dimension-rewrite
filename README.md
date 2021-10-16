@@ -11,7 +11,7 @@ This includes:
   - Hirbuvia
 
 Types within bunch file:
-  - Type 2:
+  - Type 2: mouse cursors
   - Type 3: palette
   - Type 4: script (screens)
   - Type 6: backgrounds

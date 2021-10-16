@@ -2,7 +2,7 @@
 	$framebuffer = array_fill(0, 640*480, 0);
 	$palette = array_fill(0, 256, 0);
 
-	class PictureDecoder
+	class XPictureDecoder
 	{
 		public function decode(string $f)
 		{
@@ -164,7 +164,7 @@
 	$name = "GUITAR";
 
 	$f = file_get_contents("2.$name");
-	$decoder = new PictureDecoder();
+	$decoder = new XPictureDecoder();
 	$framebuffer = $decoder->decode($f);
 	$im = create_image($framebuffer, $palette);
 	imagepng($im, "$name.PNG");

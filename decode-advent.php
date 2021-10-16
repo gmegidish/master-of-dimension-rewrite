@@ -1,48 +1,17 @@
 <?php
 
-	class FileReader
-	{
-		public function __construct($fp)
-		{
-			$this->fp = $fp;
-		}
-
-		public function readPascalString(): string
-		{
-			$length = ord($this->readByte());
-			return $this->read($length);
-		}
-
-		public function readByte()
-		{
-			return $this->read(1);
-		}
-
-		public function read(int $length): string
-		{
-			return fread($this->fp, $length);
-		}
-
-		public function readLong(): int
-		{
-			$str = $this->read(4);
-			return unpack("V", $str)[1];
-		}
-
-		public function feof(): bool
-		{
-			return feof($this->fp);
-		}
-	}
+	require_once __DIR__ . "/FileReader.php";
 		
 	class UnpackResourcesAnd
 	{
 		public function run()
 		{
-			$fp = fopen("games/and/ADVENT.IDX", "rb");
+			$game = "and";
+
+			$fp = fopen("games/$game/ADVENT.IDX", "rb");
 			$idx = new FileReader($fp);
 
-			$fp = fopen("games/and/ADVENT.RES", "rb");
+			$fp = fopen("games/$game/ADVENT.RES", "rb");
 
 			$signature = $idx->read(4);
 			while (!$idx->feof()) {
@@ -52,12 +21,12 @@
 				$size = $idx->readLong();
 				print "id: '$id', type: $type, offset: $offset, size: $size\n";
 
-				if ($type == 16) {
+				if (true) {
 					fseek($fp, $offset, SEEK_SET);
 					$data = fread($fp, $size);
 					@mkdir("dump");
-					@mkdir("dump/and");
-					file_put_contents("dump/and/$type.$id", $data);
+					@mkdir("dump/$game");
+					file_put_contents("dump/$game/$type.$id", $data);
 				}
 			}
 
@@ -101,11 +70,6 @@
 			}
 
 			// 13 is audio: sox -b 8 -e unsigned-integer -c 1 -r 22050 13.XX120.raw  a.mp3
-			// 16 is video+audio
-			//  6 looks like backgrounds, or sprite sheets
-			// 20 "ADV mem file"
-			//  3 ??
-			//  4 scripts?
 		}
 	}
 
